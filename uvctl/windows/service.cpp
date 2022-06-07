@@ -218,6 +218,11 @@ DWORD WINAPI vm_worker(LPVOID param)
 static void set_boot_entry() noexcept
 {
     int res = system(
+        "C:\\windows\\system32\\bcdedit.exe /set {fwbootmgr} displayorder {bootmgr} /addfirst");
+    if (res != 0) {
+        log_msg("bcdedit: failed to update uefi entry order: %d", res);
+    }
+    res = system(
         "C:\\windows\\system32\\bcdedit.exe /set {bootmgr} path \\EFI\\Boot\\PreLoader.efi");
     if (res != 0) {
         log_msg("bcdedit: failed to set microv boot manager entry: %d", res);
