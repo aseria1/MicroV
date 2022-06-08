@@ -28,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <stdlib.h>
+#include <string>
 #include <windows.h>
 #include <microv/xenbusinterface.h>
 
@@ -215,15 +216,21 @@ DWORD WINAPI vm_worker(LPVOID param)
  * Ensure boot entry is set/refreshed on exit to prevent Windows
  * from overriding it
  */
-static void set_boot_entry() noexcept
+static void set_boot_entry(bool test_signed) noexcept
 {
+    std::string path = "\\EFI\\Boot\\PreLoader.efi";
+    if (test_signed) {
+        path = "\\EFI\\Boot\\loader.efi";
+    }
+
     int res = system(
         "C:\\windows\\system32\\bcdedit.exe /set {fwbootmgr} displayorder {bootmgr} /addfirst");
     if (res != 0) {
         log_msg("bcdedit: failed to update uefi entry order: %d", res);
     }
     res = system(
-        "C:\\windows\\system32\\bcdedit.exe /set {bootmgr} path \\EFI\\Boot\\PreLoader.efi");
+        ("C:\\windows\\system32\\bcdedit.exe /set {bootmgr} path " + path)
+            .c_str());
     if (res != 0) {
         log_msg("bcdedit: failed to set microv boot manager entry: %d", res);
     }
@@ -231,9 +238,18 @@ static void set_boot_entry() noexcept
 
 void WINAPI service_main(DWORD argc, LPTSTR *argv)
 {
+    bool test_signed = false;
+    for (DWORD i = 0; i < argc; i++) {
+        std::string arg(argv[i]);
+        if (arg == "--testsigned") {
+            test_signed = true;
+            break;
+        }
+    }
+
     if (!init()) {
         log_msg("%s: init failed\n", __func__);
-        set_boot_entry();
+        set_boot_entry(test_signed);
         return;
     }
 
@@ -257,7 +273,7 @@ void WINAPI service_main(DWORD argc, LPTSTR *argv)
                 exit_code);
 
         stop_with_error(exit_code);
-        set_boot_entry();
+        set_boot_entry(test_signed);
         return;
     }
 
@@ -278,7 +294,7 @@ void WINAPI service_main(DWORD argc, LPTSTR *argv)
 
         CloseHandle(service_stop_event);
         stop_with_error(exit_code);
-        set_boot_entry();
+        set_boot_entry(test_signed);
         return;
     }
 
@@ -309,7 +325,7 @@ void WINAPI service_main(DWORD argc, LPTSTR *argv)
         }
     }
 
-    set_boot_entry();
+    set_boot_entry(test_signed);
 
     set_status(SERVICE_ACCEPT_NONE, SERVICE_STOPPED, NO_ERROR);
 
